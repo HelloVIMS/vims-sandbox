@@ -13,6 +13,7 @@
 //   GET    /v1/instances/:id                status { running, ready, ... }
 //   PATCH  /v1/instances/:id                live update: egress, model (no restart)
 //   DELETE /v1/instances/:id                stop and forget
+//   POST   /v1/instances/:id/wake           start a stopped container with its saved spec
 //   GET    /v1/instances/:id/logs?lines=N   the runtime's recent output
 //   *      /v1/instances/:id/http/<path>    the runtime's own HTTP/WebSocket API
 import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
@@ -225,6 +226,14 @@ export class VimsSandbox extends DurableObject<Env> {
     };
   }
 
+  /** Starts a stopped container from its saved spec (no wait); the caller polls status for ready. */
+  async wake(): Promise<Record<string, unknown>> {
+    const spec = this.spec();
+    if (!spec) throw new Error("instance not started");
+    if (!this.container.running) await this.launch(spec);
+    return this.status();
+  }
+
   async stop(): Promise<void> {
     this.ctx.storage.kv.delete("spec");
     this.ctx.storage.kv.delete("runningSpec");
@@ -269,12 +278,16 @@ export default {
     if (!env.SANDBOX_TOKEN) return json(503, { error: "SANDBOX_TOKEN is not set on this Worker" });
     if (!(await sameSecret(request.headers.get(TOKEN_HEADER) ?? "", env.SANDBOX_TOKEN))) return json(401, { error: "unauthorized" });
 
-    const m = /^\/v1\/instances\/([^/]+)(\/logs|\/http(\/.*)?)?$/.exec(url.pathname);
+    const m = /^\/v1\/instances\/([^/]+)(\/logs|\/wake|\/http(\/.*)?)?$/.exec(url.pathname);
     const id = m?.[1] ? decodeURIComponent(m[1]) : "";
     if (!m || !INSTANCE_ID.test(id)) return json(404, { error: "not found" });
     const sandbox = stub(env, id);
 
     try {
+      if (m[2] === "/wake") {
+        if (request.method !== "POST") return json(405, { error: "method not allowed" });
+        return json(200, await sandbox.wake());
+      }
       if (m[2] === "/logs") {
         if (request.method !== "GET") return json(405, { error: "method not allowed" });
         const lines = Number(url.searchParams.get("lines") ?? "200");

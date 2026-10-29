@@ -10,6 +10,7 @@ function fakeEnv(withToken = true) {
     status: vi.fn(async () => ({ running: false })),
     stop: vi.fn(async () => {}),
     update: vi.fn(async (p: unknown) => ({ running: true, applied: p })),
+    wake: vi.fn(async () => ({ running: true, ready: false })),
     logs: vi.fn(async (n: number) => `last ${n}\n`),
     fetch: vi.fn(async (r: Request) => new Response(JSON.stringify({
       url: r.url,
@@ -85,6 +86,13 @@ describe("the Worker API", () => {
     expect(ok.status).toBe(200);
     expect(stub.update.mock.calls[0]![0]).toEqual({ egress: { default: "deny", rules: [{ host: "*.gov" }] } });
     expect((await worker.fetch(req("/v1/instances/oc-1", { method: "PATCH", body: "{}" }, "wrong"), env)).status).toBe(401);
+  });
+
+  it("wakes a stopped instance on POST only", async () => {
+    const { env, stub } = fakeEnv();
+    expect(await (await worker.fetch(req("/v1/instances/oc-1/wake", { method: "POST" }), env)).json()).toEqual({ running: true, ready: false });
+    expect(stub.wake).toHaveBeenCalledTimes(1);
+    expect((await worker.fetch(req("/v1/instances/oc-1/wake"), env)).status).toBe(405);
   });
 
   it("stops, reports status and returns logs", async () => {

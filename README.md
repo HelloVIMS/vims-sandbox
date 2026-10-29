@@ -37,6 +37,7 @@ Every `/v1` request carries `X-Vims-Sandbox-Token: <SANDBOX_TOKEN>`.
 | GET | `/v1/instances/:id` | Status: `running`, `ready`, `runtime`, `model`, `lastExit` |
 | PATCH | `/v1/instances/:id` | Live update `{ egress?, model? }` — applied to a running container without a restart |
 | DELETE | `/v1/instances/:id` | Stop and forget |
+| POST | `/v1/instances/:id/wake` | Start a stopped container from its saved spec (poll status for `ready`) |
 | GET | `/v1/instances/:id/logs?lines=N` | The runtime's recent output |
 | any | `/v1/instances/:id/http/<path>` | The runtime's own HTTP / WebSocket API |
 
