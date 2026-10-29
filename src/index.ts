@@ -11,6 +11,7 @@
 //   GET    /health                          public: version + runtimes
 //   PUT    /v1/instances/:id                start (idempotent for the same spec)
 //   GET    /v1/instances/:id                status { running, ready, ... }
+//   PATCH  /v1/instances/:id                live update: egress, model (no restart)
 //   DELETE /v1/instances/:id                stop and forget
 //   GET    /v1/instances/:id/logs?lines=N   the runtime's recent output
 //   *      /v1/instances/:id/http/<path>    the runtime's own HTTP/WebSocket API
@@ -18,7 +19,7 @@ import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import { GATEWAY_HOST, sameSecret, serveGateway, type ModelRoute } from "./gateway";
 import { evaluate, type EgressPolicy } from "./policy";
 import { RUNTIMES, RUNTIME_NAMES } from "./runtimes";
-import { DEFAULT_TIMEOUT, INSTANCE_ID, parseSpec, specHash, type StartSpec } from "./spec";
+import { DEFAULT_TIMEOUT, INSTANCE_ID, parseLiveUpdate, parseSpec, specHash, type LiveUpdate, type StartSpec } from "./spec";
 import { CA_PATH, RUNTIME_LOG, entrypointFor, fileEnv } from "./wrapper";
 
 declare const __VIMS_SANDBOX_VERSION__: string;
@@ -189,6 +190,25 @@ export class VimsSandbox extends DurableObject<Env> {
     return this.status();
   }
 
+  /**
+   * Applies a new egress policy or model to the instance's saved spec and,
+   * if its container runs, to the container's intercepts at once — the
+   * intercepts carry them as props, and registering again replaces the
+   * handler without dropping open connections. No restart, no lost disk.
+   */
+  async update(patch: LiveUpdate): Promise<Record<string, unknown>> {
+    const spec = this.spec();
+    if (!spec) throw new Error("instance not started");
+    const wasCurrent = this.ctx.storage.kv.get("runningSpec") === (await specHash(spec));
+    const next: StartSpec = { ...spec, ...(patch.egress ? { egress: patch.egress } : {}), ...(patch.model ? { model: patch.model } : {}) };
+    this.ctx.storage.kv.put("spec", next);
+    if (this.container.running && wasCurrent) {
+      await this.configure(next);
+      this.ctx.storage.kv.put("runningSpec", await specHash(next));
+    }
+    return this.status();
+  }
+
   async status(): Promise<Record<string, unknown>> {
     const spec = this.spec();
     const running = this.container.running;
@@ -273,6 +293,11 @@ export default {
         }
         case "GET":
           return json(200, await sandbox.status());
+        case "PATCH": {
+          const patch = parseLiveUpdate(await request.json().catch(() => null));
+          if (typeof patch === "string") return json(400, { error: patch });
+          return json(200, await sandbox.update(patch));
+        }
         case "DELETE":
           await sandbox.stop();
           return json(200, { stopped: true });

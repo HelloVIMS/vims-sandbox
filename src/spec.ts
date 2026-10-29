@@ -84,6 +84,31 @@ export function parseSpec(instanceId: string, raw: unknown, runtimes: readonly s
   };
 }
 
+/** What can change on a running instance without restarting it. */
+export interface LiveUpdate {
+  egress?: EgressPolicy;
+  model?: ModelRoute;
+}
+
+/** A LiveUpdate from untrusted JSON, or an error naming the first problem. */
+export function parseLiveUpdate(raw: unknown): LiveUpdate | string {
+  if (!raw || typeof raw !== "object") return "body must be a JSON object";
+  const r = raw as Record<string, unknown>;
+  const out: LiveUpdate = {};
+  if (r.egress !== undefined) {
+    const egress = parsePolicy(r.egress);
+    if (!egress) return "egress must be { default, rules: [{ host, methods?, paths?, action? }] }";
+    out.egress = egress;
+  }
+  if (r.model !== undefined) {
+    const m = r.model as Record<string, unknown> | null;
+    if (!m || !isProvider(m.provider) || typeof m.model !== "string" || !m.model) return "model must be { provider, model } with a provider the sandbox gateway serves";
+    out.model = { provider: m.provider, model: m.model };
+  }
+  if (!out.egress && !out.model) return "nothing to update (egress, model)";
+  return out;
+}
+
 /** A stable fingerprint of a spec: a running container is reused only for the same one. */
 export async function specHash(spec: StartSpec): Promise<string> {
   const data = new TextEncoder().encode(JSON.stringify(spec));

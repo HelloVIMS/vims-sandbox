@@ -9,6 +9,7 @@ function fakeEnv(withToken = true) {
     start: vi.fn(async (spec: unknown) => { calls.push({ method: "start", args: [spec] }); return { running: true }; }),
     status: vi.fn(async () => ({ running: false })),
     stop: vi.fn(async () => {}),
+    update: vi.fn(async (p: unknown) => ({ running: true, applied: p })),
     logs: vi.fn(async (n: number) => `last ${n}\n`),
     fetch: vi.fn(async (r: Request) => new Response(JSON.stringify({
       url: r.url,
@@ -73,6 +74,17 @@ describe("the Worker API", () => {
     const res = await worker.fetch(req("/v1/instances/oc-1/http/v1/chat/completions?s=1", { method: "POST", headers: edge, body: "{}" }), env);
     const got = (await res.json()) as { url: string; token: string | null; auth: string; forwarded: string[] };
     expect(got).toEqual({ url: "http://instance/v1/chat/completions?s=1", token: null, auth: "Bearer instance-token", forwarded: [] });
+  });
+
+  it("applies a live egress/model update, validated", async () => {
+    const { env, stub } = fakeEnv();
+    const bad = await worker.fetch(req("/v1/instances/oc-1", { method: "PATCH", body: JSON.stringify({ model: { provider: "vims", model: "x" } }) }), env);
+    expect(bad.status).toBe(400);
+    expect((await worker.fetch(req("/v1/instances/oc-1", { method: "PATCH", body: "{}" }), env)).status).toBe(400);
+    const ok = await worker.fetch(req("/v1/instances/oc-1", { method: "PATCH", body: JSON.stringify({ egress: { default: "deny", rules: [{ host: "*.gov" }] } }) }), env);
+    expect(ok.status).toBe(200);
+    expect(stub.update.mock.calls[0]![0]).toEqual({ egress: { default: "deny", rules: [{ host: "*.gov" }] } });
+    expect((await worker.fetch(req("/v1/instances/oc-1", { method: "PATCH", body: "{}" }, "wrong"), env)).status).toBe(401);
   });
 
   it("stops, reports status and returns logs", async () => {
