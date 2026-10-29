@@ -83,7 +83,10 @@ export class Outbound extends WorkerEntrypoint<Env, OutboundProps> {
   }
 }
 
-const READY_TIMEOUT_MS = 120_000;
+// A cold container on a small instance can take minutes before the runtime
+// listens (OpenClaw: ~2-4 min on standard-1); a request that wakes a
+// stopped container waits as long as VIMS waits for a start.
+const READY_TIMEOUT_MS = 300_000;
 
 /** One VIMS instance: its container, spec and lifecycle. */
 export class VimsSandbox extends DurableObject<Env> {
