@@ -133,6 +133,9 @@ export class VimsSandbox extends DurableObject<Env> {
         SSL_CERT_FILE: CA_PATH,
         REQUESTS_CA_BUNDLE: CA_PATH,
         VIMS_SANDBOX: "cloudflare",
+        // Every connection goes to the Outbound policy and DNS answers are
+        // placeholders: runtimes' own private-address guards can stand down.
+        VIMS_EGRESS_MEDIATED: "1",
         VIMS_INSTANCE_ID: spec.instanceId,
       },
       labels: { runtime: spec.runtime, vims: spec.instanceId.slice(0, 64) },
