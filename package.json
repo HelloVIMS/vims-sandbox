@@ -1,0 +1,20 @@
+{
+  "name": "vims-sandbox",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VIMS agent sandbox on Cloudflare: one container per VIMS agent instance, its model reached through the Worker, its egress under the instance's VIMS policy.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "bundle": "node scripts/bundle.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261019.1",
+    "@types/node": "24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "vitest": "4.1.12"
+  }
+}

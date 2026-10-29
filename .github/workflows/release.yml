@@ -1,0 +1,66 @@
+name: Release
+
+# Test, bundle and publish the sandbox Worker VIMS deploys to its users'
+# Cloudflare accounts. Each push to main becomes release vims-sandbox-<sha12>
+# and refreshes the rolling `latest` release VIMS downloads:
+#   vims-sandbox-bundle.tar.gz          manifest.json + worker/index.js
+#   vims-sandbox-bundle.tar.gz.sha256   checked by VIMS before deploying
+#   manifest.json                       the same manifest, for reading
+# Runtime images are not rebuilt: runtimes.lock.json pins each upstream image
+# by digest, and VIMS copies it from its public registry into the account.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  release:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Bundle
+        id: b
+        run: |
+          version="vims-sandbox-$(git rev-parse --short=12 HEAD)"
+          node scripts/bundle.mjs bundle "$version"
+          tar -C bundle -czf vims-sandbox-bundle.tar.gz .
+          sha256sum vims-sandbox-bundle.tar.gz | cut -d' ' -f1 > vims-sandbox-bundle.tar.gz.sha256
+          cp bundle/manifest.json manifest.json
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ steps.b.outputs.version }}"
+          assets=(vims-sandbox-bundle.tar.gz vims-sandbox-bundle.tar.gz.sha256 manifest.json)
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "$tag" --notes "Bundle for commit ${GITHUB_SHA}." --prerelease --latest=false
+          gh release upload "$tag" "${assets[@]}" --clobber
+          gh release view latest >/dev/null 2>&1 || gh release create latest --title "latest" --notes "Rolling: the newest vims-sandbox bundle." --latest
+          gh release upload latest "${assets[@]}" --clobber
+          gh release edit latest --notes "Rolling: ${tag} (commit ${GITHUB_SHA})."

@@ -1,0 +1,34 @@
+{
+  "comment": "Shared with VIMS pkg/policy/testdata/egress_vectors.json: both enforcers must agree on every case.",
+  "policies": {
+    "records": {
+      "default": "deny",
+      "rules": [
+        { "name": "no-uploads", "host": "*.gov", "methods": ["PUT"], "action": "deny" },
+        { "name": "gov", "host": "*.gov", "methods": ["GET", "HEAD", "POST"] },
+        { "name": "court", "host": "www.courtlistener.com", "paths": ["/api/*"] },
+        { "name": "exact", "host": "npiregistry.cms.hhs.gov", "paths": ["/api/"] }
+      ]
+    },
+    "open-but-blocked": {
+      "default": "allow",
+      "rules": [{ "name": "block-pastebin", "host": "pastebin.com", "action": "deny" }]
+    },
+    "empty": { "default": "deny", "rules": [] }
+  },
+  "cases": [
+    { "policy": "records", "host": "npiregistry.cms.hhs.gov", "method": "GET", "path": "/api/", "allowed": true, "rule": "gov" },
+    { "policy": "records", "host": "NPIREGISTRY.CMS.HHS.GOV:443", "method": "get", "path": "/x", "allowed": true, "rule": "gov" },
+    { "policy": "records", "host": "gov", "method": "GET", "path": "/", "allowed": true, "rule": "gov" },
+    { "policy": "records", "host": "evilgov", "method": "GET", "path": "/", "allowed": false },
+    { "policy": "records", "host": "data.cms.gov", "method": "PUT", "path": "/", "allowed": false, "rule": "no-uploads" },
+    { "policy": "records", "host": "data.cms.gov", "method": "DELETE", "path": "/", "allowed": false },
+    { "policy": "records", "host": "www.courtlistener.com", "method": "GET", "path": "/api/rest/v4/search/", "allowed": true, "rule": "court" },
+    { "policy": "records", "host": "www.courtlistener.com", "method": "GET", "path": "/api", "allowed": true, "rule": "court" },
+    { "policy": "records", "host": "www.courtlistener.com", "method": "GET", "path": "/login", "allowed": false },
+    { "policy": "records", "host": "example.com", "method": "GET", "path": "/", "allowed": false },
+    { "policy": "open-but-blocked", "host": "example.com", "method": "POST", "path": "/", "allowed": true },
+    { "policy": "open-but-blocked", "host": "pastebin.com", "method": "GET", "path": "/raw/x", "allowed": false, "rule": "block-pastebin" },
+    { "policy": "empty", "host": "api.github.com", "method": "GET", "path": "/", "allowed": false }
+  ]
+}

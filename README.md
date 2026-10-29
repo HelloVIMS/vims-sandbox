@@ -1,0 +1,59 @@
+# vims-sandbox
+
+The Cloudflare backend for VIMS agent sandboxes. VIMS deploys this Worker to
+*your* Cloudflare account from an API token (desktop: Agents → Cloudflare
+Sandbox; chat.vims.com: Deploy → your server → Agent sandbox) — no wrangler,
+Node or Docker needed on your machine.
+
+## What it does
+
+- **One container per agent.** Each VIMS agent instance is a Durable Object
+  that starts its own [Cloudflare container](https://developers.cloudflare.com/containers/)
+  — a microVM with its own kernel and network — from its runtime's image
+  (`runtimes.lock.json`: OpenClaw and ZeroClaw, upstream images pinned by digest).
+- **Provider keys never enter the container.** The runtime calls an
+  OpenAI-compatible API at `http://vims.gateway/v1` with its instance token.
+  The Worker checks the token, uses the model VIMS chose for that instance
+  (the runtime's own model id is ignored), adds the provider key it holds as a
+  Worker secret and streams the answer back.
+- **Egress under the agent's VIMS policy.** Containers start with Internet
+  off; every HTTP and HTTPS request goes through the Worker, which applies the
+  instance's VIMS egress rules (default deny, the same evaluation as VIMS's
+  local egress proxy — `test/egress_vectors.json` is shared with VIMS).
+
+## API
+
+Every `/v1` request carries `X-Vims-Sandbox-Token: <SANDBOX_TOKEN>`.
+
+| Method | Path | |
+| --- | --- | --- |
+| GET | `/health` | Public: version and runtimes |
+| PUT | `/v1/instances/:id` | Start (idempotent for the same spec) |
+| GET | `/v1/instances/:id` | Status: `running`, `ready`, `runtime`, `model`, `lastExit` |
+| DELETE | `/v1/instances/:id` | Stop and forget |
+| GET | `/v1/instances/:id/logs?lines=N` | The runtime's recent output |
+| any | `/v1/instances/:id/http/<path>` | The runtime's own HTTP / WebSocket API |
+
+A start spec: `runtime`, `port`, `env`, `files` (seeded config, base64),
+`args?`, `egress` (`{ default, rules }`), `model` (`{ provider, model }`),
+`gatewayToken`, `instance?` (`standard-1`), `inactivityTimeoutMs?` (2 h).
+A stopped container with a saved spec is started again on its next request.
+
+## Secrets
+
+`SANDBOX_TOKEN` (VIMS generates it) and the provider keys you choose:
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`,
+`XAI_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`,
+`MOONSHOT_API_KEY`, `NVIDIA_API_KEY`.
+
+## Develop
+
+```sh
+npm ci
+npm run typecheck && npm test
+node scripts/lock-images.mjs   # re-pin runtime images; review and commit the lock
+node scripts/bundle.mjs dist   # what CI publishes
+```
+
+Each push to `main` publishes release `vims-sandbox-<sha12>` and the rolling
+`latest` that VIMS deploys.

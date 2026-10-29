@@ -1,0 +1,4 @@
+{
+  "openclaw": { "image": "ghcr.io/openclaw/openclaw:latest", "shell": "/bin/sh" },
+  "zeroclaw": { "image": "ghcr.io/zeroclaw-labs/zeroclaw:latest", "shell": null }
+}

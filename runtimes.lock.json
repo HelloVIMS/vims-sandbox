@@ -1,0 +1,34 @@
+{
+  "openclaw": {
+    "from": "ghcr.io/openclaw/openclaw:latest",
+    "source": "ghcr.io/openclaw/openclaw@sha256:eba17fa04b4ac5616496c2ce374a95afb6db6ff52d8bf73bf87dc8c7b8656cad",
+    "entrypoint": [
+      "tini",
+      "-s",
+      "--",
+      "node",
+      "/app/docker-entrypoint.mjs"
+    ],
+    "cmd": [
+      "node",
+      "openclaw.mjs",
+      "gateway"
+    ],
+    "user": "node",
+    "sizeBytes": 674089475,
+    "shell": "/bin/sh"
+  },
+  "zeroclaw": {
+    "from": "ghcr.io/zeroclaw-labs/zeroclaw:latest",
+    "source": "ghcr.io/zeroclaw-labs/zeroclaw@sha256:6f65694578f87964e702b848e13e93729579f939dc93b15564f2a8a41c61d010",
+    "entrypoint": [
+      "zeroclaw"
+    ],
+    "cmd": [
+      "daemon"
+    ],
+    "user": "65534:65534",
+    "sizeBytes": 48783537,
+    "shell": null
+  }
+}
