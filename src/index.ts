@@ -42,6 +42,21 @@ declare global {
 
 const TOKEN_HEADER = "x-vims-sandbox-token";
 
+/**
+ * Headers the runtime must not see: the Worker's token, and the forwarding
+ * headers Cloudflare's edge adds. The caller is VIMS and the Worker is the
+ * only hop, so there is no client to attribute; runtimes that trust no proxy
+ * (OpenClaw) refuse a request that claims one.
+ */
+function stripForRuntime(headers: Headers): void {
+  for (const name of [...headers.keys()]) {
+    const n = name.toLowerCase();
+    if (n === TOKEN_HEADER || n === "forwarded" || n === "x-real-ip" || n === "true-client-ip" || n === "cdn-loop" || n.startsWith("x-forwarded-") || n.startsWith("cf-")) {
+      headers.delete(name);
+    }
+  }
+}
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -241,9 +256,10 @@ export default {
       }
       if (m[2]?.startsWith("/http")) {
         // Same method, body and headers (the runtime's own Authorization
-        // included), minus the Worker's token; redirects go back to VIMS.
+        // included), minus the Worker's token and the edge's forwarding
+        // headers; redirects go back to VIMS.
         const inner = new Request(new Request(`http://instance${m[3] ?? "/"}${url.search}`, request), { redirect: "manual" });
-        inner.headers.delete(TOKEN_HEADER);
+        stripForRuntime(inner.headers);
         return sandbox.fetch(inner);
       }
       switch (request.method) {

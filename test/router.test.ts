@@ -10,7 +10,12 @@ function fakeEnv(withToken = true) {
     status: vi.fn(async () => ({ running: false })),
     stop: vi.fn(async () => {}),
     logs: vi.fn(async (n: number) => `last ${n}\n`),
-    fetch: vi.fn(async (r: Request) => new Response(JSON.stringify({ url: r.url, token: r.headers.get("x-vims-sandbox-token"), auth: r.headers.get("authorization") }))),
+    fetch: vi.fn(async (r: Request) => new Response(JSON.stringify({
+      url: r.url,
+      token: r.headers.get("x-vims-sandbox-token"),
+      auth: r.headers.get("authorization"),
+      forwarded: [...r.headers.keys()].filter((h) => h.startsWith("x-forwarded") || h.startsWith("cf-") || h === "x-real-ip" || h === "forwarded"),
+    }))),
   };
   const ids: string[] = [];
   const env = {
@@ -64,8 +69,10 @@ describe("the Worker API", () => {
 
   it("proxies the runtime API without the sandbox token, keeping the runtime's own auth", async () => {
     const { env } = fakeEnv();
-    const res = await worker.fetch(req("/v1/instances/oc-1/http/v1/chat/completions?s=1", { method: "POST", headers: { authorization: "Bearer instance-token" }, body: "{}" }), env);
-    expect(await res.json()).toEqual({ url: "http://instance/v1/chat/completions?s=1", token: null, auth: "Bearer instance-token" });
+    const edge = { authorization: "Bearer instance-token", "x-forwarded-for": "203.0.113.9", "x-forwarded-proto": "https", "x-real-ip": "203.0.113.9", "cf-connecting-ip": "203.0.113.9", forwarded: "for=203.0.113.9" };
+    const res = await worker.fetch(req("/v1/instances/oc-1/http/v1/chat/completions?s=1", { method: "POST", headers: edge, body: "{}" }), env);
+    const got = (await res.json()) as { url: string; token: string | null; auth: string; forwarded: string[] };
+    expect(got).toEqual({ url: "http://instance/v1/chat/completions?s=1", token: null, auth: "Bearer instance-token", forwarded: [] });
   });
 
   it("stops, reports status and returns logs", async () => {
