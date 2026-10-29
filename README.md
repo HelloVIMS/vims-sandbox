@@ -44,7 +44,15 @@ Every `/v1` request carries `X-Vims-Sandbox-Token: <SANDBOX_TOKEN>`.
 A start spec: `runtime`, `port`, `env`, `files` (seeded config, base64), `dirs`,
 `args?`, `egress` (`{ default, rules }`), `model` (`{ provider, model }`),
 `gatewayToken`, `instance?` (`standard-1`), `inactivityTimeoutMs?` (2 h).
-A stopped container with a saved spec is started again on its next request.
+A stopped container with a saved spec is started again on its next request
+(or `POST …/wake`).
+
+**Idle.** A container stops `inactivityTimeoutMs` after the instance's
+last request — and *every* request counts, status reads included (measured:
+a 1-minute timeout never fired under 30-second status polls). Poll less often
+than the timeout, or agents never sleep. A start holds the Durable Object for
+up to 15 minutes (it watches the container for its exit status), so the
+earliest stop is about then.
 
 ## Secrets
 
