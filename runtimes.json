@@ -1,4 +1,65 @@
 {
-  "openclaw": { "image": "ghcr.io/openclaw/openclaw:latest", "shell": "/bin/sh" },
-  "zeroclaw": { "image": "ghcr.io/zeroclaw-labs/zeroclaw:latest", "shell": null }
+  "openclaw": {
+    "image": "ghcr.io/openclaw/openclaw:latest",
+    "shell": "/bin/sh"
+  },
+  "zeroclaw": {
+    "image": "ghcr.io/zeroclaw-labs/zeroclaw:latest",
+    "shell": null
+  },
+  "hermes": {
+    "base": "docker.io/library/buildpack-deps:trixie-curl",
+    "shell": "/bin/sh",
+    "entrypoint": [
+      "/opt/vims/bin/hermes"
+    ],
+    "cmd": [],
+    "files": [
+      {
+        "path": "/opt/vims/bin/hermes",
+        "mode": 493,
+        "from": "https://github.com/HelloVIMS/Runtimes/releases/download/latest/hermes-linux-amd64"
+      }
+    ]
+  },
+  "openfang": {
+    "base": "docker.io/library/buildpack-deps:trixie-curl",
+    "shell": "/bin/sh",
+    "entrypoint": [
+      "/opt/vims/bin/openfang"
+    ],
+    "cmd": [],
+    "files": [
+      {
+        "path": "/opt/vims/bin/openfang",
+        "mode": 493,
+        "from": "https://github.com/HelloVIMS/Runtimes/releases/download/latest/openfang-linux-amd64"
+      }
+    ]
+  },
+  "nemoclaw": {
+    "base": "docker.io/library/buildpack-deps:trixie-curl",
+    "shell": "/bin/sh",
+    "entrypoint": [
+      "/opt/vims/bin/nemoclaw-adapter"
+    ],
+    "cmd": [],
+    "files": [
+      {
+        "path": "/opt/vims/bin/nemoclaw",
+        "mode": 493,
+        "from": "https://github.com/HelloVIMS/Runtimes/releases/download/latest/nemoclaw-linux-amd64"
+      },
+      {
+        "path": "/opt/package.json",
+        "mode": 420,
+        "content": "{\"name\":\"nemoclaw\",\"version\":\"0.1.0\",\"description\":\"VIMS-extracted runtime stub (auto-generated)\"}\n"
+      },
+      {
+        "path": "/opt/vims/bin/nemoclaw-adapter",
+        "mode": 493,
+        "vims": "nemoclaw-adapter"
+      }
+    ]
+  }
 }

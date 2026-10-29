@@ -4,3 +4,4 @@ bundle/
 *.tar.gz
 *.tar.gz.sha256
 /manifest.json
+bundle-assets/

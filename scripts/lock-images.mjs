@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-// Pins each runtime in runtimes.json to its current linux/amd64 image digest
-// and records the image's entrypoint and command (the Worker wraps them), in
-// runtimes.lock.json. Review the diff and commit it: deploys only ever run
-// the digests in the lock.
+// Pins each runtime in runtimes.json, in runtimes.lock.json: an upstream
+// image to its current linux/amd64 digest, with its entrypoint and command
+// (the Worker wraps them); a runtime without one ("base" + "files") to its
+// base image's digest and each file's SHA-256 (VIMS assembles the image at
+// deploy). Review the diff and commit it: deploys only ever run what the
+// lock pins.
 //
 //   node scripts/lock-images.mjs
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -69,10 +72,39 @@ async function resolve(ref) {
   };
 }
 
+// A file added to an assembled image, pinned: a URL by its SHA-256 and
+// size; inline content as base64; a VIMS component by name.
+async function pinFile(f) {
+  const base = { path: f.path, mode: f.mode };
+  if (f.content !== undefined) return { ...base, content_base64: Buffer.from(f.content).toString("base64"), size: Buffer.byteLength(f.content) };
+  if (f.vims) return { ...base, vims: f.vims };
+  const r = await fetch(f.from, { redirect: "follow" });
+  if (!r.ok) throw new Error(`${f.from}: ${r.status}`);
+  const data = Buffer.from(await r.arrayBuffer());
+  return { ...base, source: f.from, sha256: createHash("sha256").update(data).digest("hex"), size: data.length };
+}
+
 const lock = {};
 for (const [name, src] of Object.entries(sources)) {
-  const r = await resolve(src.image);
-  lock[name] = { from: src.image, ...r, shell: src.shell };
-  console.log(`${name}: ${r.source} (${Math.round(r.sizeBytes / 2 ** 20)} MB)`);
+  if (src.image) {
+    const r = await resolve(src.image);
+    lock[name] = { from: src.image, ...r, shell: src.shell };
+  } else {
+    // No image of its own: a public base plus files, assembled at deploy.
+    const base = await resolve(src.base);
+    const files = [];
+    for (const f of src.files) files.push(await pinFile(f));
+    lock[name] = {
+      from: src.base,
+      source: base.source,
+      entrypoint: src.entrypoint,
+      cmd: src.cmd,
+      user: base.user,
+      sizeBytes: base.sizeBytes + files.reduce((n, f) => n + (f.size ?? 0), 0),
+      shell: src.shell,
+      files,
+    };
+  }
+  console.log(`${name}: ${lock[name].source}${lock[name].files ? ` + ${lock[name].files.length} files` : ""} (${Math.round(lock[name].sizeBytes / 2 ** 20)} MB)`);
 }
 fs.writeFileSync(path.join(root, "runtimes.lock.json"), JSON.stringify(lock, null, 2) + "\n");

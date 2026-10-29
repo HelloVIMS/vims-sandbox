@@ -14,6 +14,8 @@ export interface StartSpec {
   port: number;
   env: Record<string, string>;
   files: SeedFile[];
+  /** Directories created before the runtime starts. */
+  dirs: string[];
   /** Replaces the image's CMD (the image entrypoint stays). */
   args?: string[];
   egress: EgressPolicy;
@@ -52,6 +54,8 @@ export function parseSpec(instanceId: string, raw: unknown, runtimes: readonly s
       return "each file needs path and contentBase64";
     }
   }
+  const dirs = r.dirs ?? [];
+  if (!strings(dirs) || dirs.length > MAX_FILES) return `dirs must be a list of at most ${MAX_FILES} paths`;
   if (r.args !== undefined && !strings(r.args)) return "args must be a list of strings";
   const egress = parsePolicy(r.egress ?? { default: "deny", rules: [] });
   if (!egress) return "egress must be { default, rules: [{ host, methods?, paths?, action? }] }";
@@ -70,6 +74,7 @@ export function parseSpec(instanceId: string, raw: unknown, runtimes: readonly s
     port: r.port,
     env: env as Record<string, string>,
     files: files as SeedFile[],
+    dirs,
     ...(r.args !== undefined ? { args: r.args as string[] } : {}),
     egress,
     model: { provider: model.provider, model: model.model },

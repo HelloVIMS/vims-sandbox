@@ -1,6 +1,7 @@
 // The entrypoint wrapper for runtime images that have a POSIX shell. It runs
 // before the runtime's own entrypoint and:
-//   1. writes the config files VIMS seeded (VIMS_FILE_<n>_PATH / _B64),
+//   1. creates the directories VIMS asked for (VIMS_MKDIRS, ':'-separated)
+//      and writes the config files it seeded (VIMS_FILE_<n>_PATH / _B64),
 //   2. waits for the egress-interception CA the Worker's intercepts make
 //      Cloudflare place in the container (HTTPS to allowed hosts needs it),
 //   3. execs the runtime with stdout+stderr copied to RUNTIME_LOG, which the
@@ -17,6 +18,8 @@ export const MAX_FILE_BYTES = 256 * 1024;
 
 export const WRAPPER_SCRIPT = [
   "set -e",
+  'if [ -n "${VIMS_MKDIRS:-}" ]; then (IFS=:; for d in $VIMS_MKDIRS; do mkdir -p "$d"; done); fi',
+  "unset VIMS_MKDIRS",
   "i=0",
   'while :; do eval "p=\\${VIMS_FILE_${i}_PATH:-}"; [ -n "$p" ] || break',
   '  eval "b=\\${VIMS_FILE_${i}_B64:-}"',
@@ -38,13 +41,19 @@ export interface SeedFile {
   contentBase64: string;
 }
 
-/** Env carrying the seed files to the wrapper. Throws on unsafe input. */
-export function fileEnv(files: SeedFile[]): Record<string, string> {
-  if (files.length > MAX_FILES) throw new Error(`at most ${MAX_FILES} seed files`);
+const safePath = (p: string) => p.startsWith("/") && !p.split("/").includes("..") && !/[\0\n:]/.test(p);
+
+/** Env carrying the seed directories and files to the wrapper. Throws on unsafe input. */
+export function fileEnv(files: SeedFile[], dirs: string[] = []): Record<string, string> {
+  if (files.length > MAX_FILES || dirs.length > MAX_FILES) throw new Error(`at most ${MAX_FILES} seed files and ${MAX_FILES} directories`);
   const env: Record<string, string> = {};
+  for (const d of dirs) {
+    if (!safePath(d)) throw new Error(`seed directory must be absolute without "..": ${JSON.stringify(d)}`);
+  }
+  if (dirs.length) env.VIMS_MKDIRS = dirs.join(":");
   let total = 0;
   files.forEach((f, i) => {
-    if (!f.path.startsWith("/") || f.path.split("/").includes("..") || /[\0\n]/.test(f.path)) {
+    if (!safePath(f.path)) {
       throw new Error(`seed file path must be absolute without "..": ${JSON.stringify(f.path)}`);
     }
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(f.contentBase64)) throw new Error(`seed file ${f.path} is not base64`);

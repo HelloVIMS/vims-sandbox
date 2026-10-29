@@ -1,7 +1,7 @@
 {
   "openclaw": {
     "from": "ghcr.io/openclaw/openclaw:latest",
-    "source": "ghcr.io/openclaw/openclaw@sha256:eba17fa04b4ac5616496c2ce374a95afb6db6ff52d8bf73bf87dc8c7b8656cad",
+    "source": "ghcr.io/openclaw/openclaw@sha256:deab8686a863c1d2255a43bb4677f4907b9af45aff340c062834d16756fd4ff8",
     "entrypoint": [
       "tini",
       "-s",
@@ -15,7 +15,7 @@
       "gateway"
     ],
     "user": "node",
-    "sizeBytes": 674089475,
+    "sizeBytes": 674109695,
     "shell": "/bin/sh"
   },
   "zeroclaw": {
@@ -30,5 +30,76 @@
     "user": "65534:65534",
     "sizeBytes": 48783537,
     "shell": null
+  },
+  "hermes": {
+    "from": "docker.io/library/buildpack-deps:trixie-curl",
+    "source": "docker.io/library/buildpack-deps@sha256:106d3a7bd7eaa8debd75b18c38462c8ba6a406e401e25c2aa4368e8e257cb308",
+    "entrypoint": [
+      "/opt/vims/bin/hermes"
+    ],
+    "cmd": [],
+    "user": "",
+    "sizeBytes": 188239170,
+    "shell": "/bin/sh",
+    "files": [
+      {
+        "path": "/opt/vims/bin/hermes",
+        "mode": 493,
+        "source": "https://github.com/HelloVIMS/Runtimes/releases/download/latest/hermes-linux-amd64",
+        "sha256": "6fd2fe28f53a3fbbce32f9dbb746f482a606f8df5fc19900c97d3028383b9660",
+        "size": 113196864
+      }
+    ]
+  },
+  "openfang": {
+    "from": "docker.io/library/buildpack-deps:trixie-curl",
+    "source": "docker.io/library/buildpack-deps@sha256:106d3a7bd7eaa8debd75b18c38462c8ba6a406e401e25c2aa4368e8e257cb308",
+    "entrypoint": [
+      "/opt/vims/bin/openfang"
+    ],
+    "cmd": [],
+    "user": "",
+    "sizeBytes": 140840322,
+    "shell": "/bin/sh",
+    "files": [
+      {
+        "path": "/opt/vims/bin/openfang",
+        "mode": 493,
+        "source": "https://github.com/HelloVIMS/Runtimes/releases/download/latest/openfang-linux-amd64",
+        "sha256": "33cd91c86c357f5d8c4d4abed2b680f17b3ef868f2f1dac84766d929f9e3ff0d",
+        "size": 65798016
+      }
+    ]
+  },
+  "nemoclaw": {
+    "from": "docker.io/library/buildpack-deps:trixie-curl",
+    "source": "docker.io/library/buildpack-deps@sha256:106d3a7bd7eaa8debd75b18c38462c8ba6a406e401e25c2aa4368e8e257cb308",
+    "entrypoint": [
+      "/opt/vims/bin/nemoclaw-adapter"
+    ],
+    "cmd": [],
+    "user": "",
+    "sizeBytes": 201772722,
+    "shell": "/bin/sh",
+    "files": [
+      {
+        "path": "/opt/vims/bin/nemoclaw",
+        "mode": 493,
+        "source": "https://github.com/HelloVIMS/Runtimes/releases/download/latest/nemoclaw-linux-amd64",
+        "sha256": "cd209aa1040522d46a78d5e31efea547722ae9ad5e1124b9aee98d60aecbe69c",
+        "size": 126730317
+      },
+      {
+        "path": "/opt/package.json",
+        "mode": 420,
+        "content_base64": "eyJuYW1lIjoibmVtb2NsYXciLCJ2ZXJzaW9uIjoiMC4xLjAiLCJkZXNjcmlwdGlvbiI6IlZJTVMtZXh0cmFjdGVkIHJ1bnRpbWUgc3R1YiAoYXV0by1nZW5lcmF0ZWQpIn0K",
+        "size": 99
+      },
+      {
+        "path": "/opt/vims/bin/nemoclaw-adapter",
+        "mode": 493,
+        "vims": "nemoclaw-adapter"
+      }
+    ]
   }
 }

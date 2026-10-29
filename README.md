@@ -10,7 +10,12 @@ Node or Docker needed on your machine.
 - **One container per agent.** Each VIMS agent instance is a Durable Object
   that starts its own [Cloudflare container](https://developers.cloudflare.com/containers/)
   — a microVM with its own kernel and network — from its runtime's image
-  (`runtimes.lock.json`: OpenClaw and ZeroClaw, upstream images pinned by digest).
+  (`runtimes.lock.json`). OpenClaw and ZeroClaw: their upstream images,
+  pinned by digest. Hermes, OpenFang and NemoClaw have none: a pinned public
+  base (`buildpack-deps:trixie-curl`) plus their HelloVIMS/Runtimes binaries,
+  pinned by SHA-256 and mirrored into each release, which VIMS assembles into
+  an image in your registry at deploy (NemoClaw also gets VIMS's adapter from
+  the deploying daemon). Nothing to publish, no package visibility to manage.
 - **Provider keys never enter the container.** The runtime calls an
   OpenAI-compatible API at `http://vims.gateway/v1` with its instance token.
   The Worker checks the token, uses the model VIMS chose for that instance
@@ -34,7 +39,7 @@ Every `/v1` request carries `X-Vims-Sandbox-Token: <SANDBOX_TOKEN>`.
 | GET | `/v1/instances/:id/logs?lines=N` | The runtime's recent output |
 | any | `/v1/instances/:id/http/<path>` | The runtime's own HTTP / WebSocket API |
 
-A start spec: `runtime`, `port`, `env`, `files` (seeded config, base64),
+A start spec: `runtime`, `port`, `env`, `files` (seeded config, base64), `dirs`,
 `args?`, `egress` (`{ default, rules }`), `model` (`{ provider, model }`),
 `gatewayToken`, `instance?` (`standard-1`), `inactivityTimeoutMs?` (2 h).
 A stopped container with a saved spec is started again on its next request.

@@ -6,8 +6,10 @@ name: Release
 #   vims-sandbox-bundle.tar.gz          manifest.json + worker/index.js
 #   vims-sandbox-bundle.tar.gz.sha256   checked by VIMS before deploying
 #   manifest.json                       the same manifest, for reading
-# Runtime images are not rebuilt: runtimes.lock.json pins each upstream image
-# by digest, and VIMS copies it from its public registry into the account.
+# Runtime images are not built here: runtimes.lock.json pins each upstream
+# image by digest (VIMS copies it into the account), and for runtimes without
+# one a public base plus files — the files are mirrored into the versioned
+# release (checked against the lock) and VIMS assembles the image at deploy.
 
 on:
   push:
@@ -61,6 +63,8 @@ jobs:
           assets=(vims-sandbox-bundle.tar.gz vims-sandbox-bundle.tar.gz.sha256 manifest.json)
           gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "$tag" --notes "Bundle for commit ${GITHUB_SHA}." --prerelease --latest=false
           gh release upload "$tag" "${assets[@]}" --clobber
+          # Runtime files the manifest points at (this tag only: immutable URLs).
+          if [ -d bundle-assets ]; then gh release upload "$tag" bundle-assets/* --clobber; fi
           gh release view latest >/dev/null 2>&1 || gh release create latest --title "latest" --notes "Rolling: the newest vims-sandbox bundle." --latest
           gh release upload latest "${assets[@]}" --clobber
           gh release edit latest --notes "Rolling: ${tag} (commit ${GITHUB_SHA})."

@@ -119,7 +119,7 @@ export class VimsSandbox extends DurableObject<Env> {
     const rt = RUNTIMES[spec.runtime];
     const image = this.container.images[spec.runtime];
     if (!rt || !image) throw new Error(`runtime ${spec.runtime} has no image in this deploy`);
-    if (!rt.shell && spec.files.length) throw new Error(`${spec.runtime}'s image has no shell, so it takes configuration from env only`);
+    if (!rt.shell && (spec.files.length || spec.dirs.length)) throw new Error(`${spec.runtime}'s image has no shell, so it takes configuration from env only`);
     const command = [...rt.entrypoint, ...(spec.args ?? rt.cmd)];
     this.container.start({
       image,
@@ -128,7 +128,7 @@ export class VimsSandbox extends DurableObject<Env> {
       entrypoint: entrypointFor(rt.shell, command),
       env: {
         ...spec.env,
-        ...fileEnv(spec.files),
+        ...fileEnv(spec.files, spec.dirs),
         NODE_EXTRA_CA_CERTS: CA_PATH,
         SSL_CERT_FILE: CA_PATH,
         REQUESTS_CA_BUNDLE: CA_PATH,

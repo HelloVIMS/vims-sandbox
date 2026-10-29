@@ -35,6 +35,7 @@ describe("start specs", () => {
     expect(bad({ instance: "huge" })).toMatch(/instance must be/);
     expect(bad({ inactivityTimeoutMs: 1000 })).toMatch(/between 1 minute and 6 hours/);
     expect(bad({ egress: { rules: [{ host: "" }] } })).toMatch(/egress/);
+    expect(bad({ dirs: "/data" })).toMatch(/dirs must be a list/);
   });
 
   it("fingerprints identical specs identically and different ones differently", async () => {
@@ -52,6 +53,9 @@ describe("the entrypoint wrapper", () => {
     expect(() => fileEnv([{ path: "relative", contentBase64: "" }])).toThrow(/absolute/);
     expect(() => fileEnv([{ path: "/a/../etc/passwd", contentBase64: "" }])).toThrow(/absolute/);
     expect(() => fileEnv([{ path: "/ok", contentBase64: "not base64!" }])).toThrow(/base64/);
+    expect(() => fileEnv([], ["/data/../etc"])).toThrow(/directory/);
+    expect(() => fileEnv([], ["/a:b"])).toThrow(/directory/);
+    expect(fileEnv([], ["/data/home", "/data/tmp"])).toEqual({ VIMS_MKDIRS: "/data/home:/data/tmp" });
   });
 
   it("wraps only images with a shell", () => {
@@ -66,8 +70,10 @@ describe("the entrypoint wrapper", () => {
     // Same script, with the container paths moved into the temp dir.
     const script = WRAPPER_SCRIPT.split(CA_PATH).join(ca).split("/tmp/vims-runtime").join(path.join(dir, "runtime"));
     const target = path.join(dir, "deep", "cfg.json");
-    const env = { PATH: process.env.PATH ?? "", ...fileEnv([{ path: target, contentBase64: Buffer.from('{"x":"y z"}').toString("base64") }]) };
-    const out = execFileSync("/bin/sh", ["-c", script, "vims-sandbox", "/bin/sh", "-c", 'cat "$0"; echo; env | grep -c VIMS_FILE_ || true', target], { env, encoding: "utf8" });
+    const made = path.join(dir, "data", "home");
+    const env = { PATH: process.env.PATH ?? "", ...fileEnv([{ path: target, contentBase64: Buffer.from('{"x":"y z"}').toString("base64") }], [made, path.join(dir, "data", "tmp")]) };
+    const out = execFileSync("/bin/sh", ["-c", script, "vims-sandbox", "/bin/sh", "-c", 'cat "$0"; echo; env | grep -c VIMS_ || true', target], { env, encoding: "utf8" });
+    expect(fs.statSync(made).isDirectory() && fs.statSync(path.join(dir, "data", "tmp")).isDirectory()).toBe(true);
     expect(fs.readFileSync(target, "utf8")).toBe('{"x":"y z"}');
     // The runtime sees the file and no leftover VIMS_FILE_* variables; its
     // output reaches both the container's stdout (Workers logs) and the log

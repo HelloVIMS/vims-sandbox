@@ -35,7 +35,7 @@ describe("the Worker API", () => {
   it("answers /health without a token, with its runtimes", async () => {
     const { env } = fakeEnv();
     const res = await worker.fetch(req("/health", {}, null), env);
-    expect(await res.json()).toMatchObject({ ok: true, service: "vims-sandbox", runtimes: ["openclaw", "zeroclaw"] });
+    expect(await res.json()).toMatchObject({ ok: true, service: "vims-sandbox", runtimes: ["hermes", "nemoclaw", "openclaw", "openfang", "zeroclaw"] });
   });
 
   it("refuses every /v1 call without the right token, and all of them when none is set", async () => {
