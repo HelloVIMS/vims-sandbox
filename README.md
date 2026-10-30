@@ -33,7 +33,7 @@ Every `/v1` request carries `X-Vims-Sandbox-Token: <SANDBOX_TOKEN>`.
 | Method | Path | |
 | --- | --- | --- |
 | GET | `/health` | Public: version and runtimes |
-| PUT | `/v1/instances/:id` | Start (idempotent for the same spec) |
+| PUT | `/v1/instances/:id[?lazy=1]` | Start (idempotent for the same spec; `lazy=1`: a stopped container with the same spec stays stopped until its next request) |
 | GET | `/v1/instances/:id` | Status: `running`, `ready`, `runtime`, `model`, `lastExit` |
 | PATCH | `/v1/instances/:id` | Live update `{ egress?, model? }` — applied to a running container without a restart |
 | DELETE | `/v1/instances/:id` | Stop and forget |

@@ -6,7 +6,7 @@ const TOKEN = "sandbox-token-abcdefghijklmnop";
 function fakeEnv(withToken = true) {
   const calls: { method: string; args: unknown[] }[] = [];
   const stub = {
-    start: vi.fn(async (spec: unknown) => { calls.push({ method: "start", args: [spec] }); return { running: true }; }),
+    start: vi.fn(async (spec: unknown, lazy?: boolean) => { calls.push({ method: "start", args: [spec, lazy] }); return { running: true }; }),
     status: vi.fn(async () => ({ running: false })),
     stop: vi.fn(async () => {}),
     update: vi.fn(async (p: unknown) => ({ running: true, applied: p })),
@@ -66,6 +66,9 @@ describe("the Worker API", () => {
     const ok = await worker.fetch(req("/v1/instances/oc-1", { method: "PUT", body: JSON.stringify(spec) }), env);
     expect(ok.status).toBe(200);
     expect(stub.start.mock.calls[0]![0]).toMatchObject({ instanceId: "oc-1", runtime: "zeroclaw" });
+    expect(stub.start.mock.calls[0]![1]).toBe(false);
+    await worker.fetch(req("/v1/instances/oc-1?lazy=1", { method: "PUT", body: JSON.stringify(spec) }), env);
+    expect(stub.start.mock.calls[1]![1]).toBe(true);
     expect(ids).toContain("oc-1");
   });
 

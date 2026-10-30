@@ -9,7 +9,9 @@
 //
 // API (X-Vims-Sandbox-Token: <SANDBOX_TOKEN> on every /v1 request):
 //   GET    /health                          public: version + runtimes
-//   PUT    /v1/instances/:id                start (idempotent for the same spec)
+//   PUT    /v1/instances/:id[?lazy=1]       start (idempotent for the same spec; lazy:
+//                                           a stopped container with this same spec
+//                                           stays stopped until its next request)
 //   GET    /v1/instances/:id                status { running, ready, ... }
 //   PATCH  /v1/instances/:id                live update: egress, model (no restart)
 //   DELETE /v1/instances/:id                stop and forget
@@ -181,14 +183,20 @@ export class VimsSandbox extends DurableObject<Env> {
     return false;
   }
 
-  async start(spec: StartSpec): Promise<Record<string, unknown>> {
+  async start(spec: StartSpec, lazy = false): Promise<Record<string, unknown>> {
     this.ctx.storage.kv.put("spec", spec);
+    const same = this.ctx.storage.kv.get("runningSpec") === (await specHash(spec));
     if (this.container.running) {
-      if (this.ctx.storage.kv.get("runningSpec") === (await specHash(spec))) {
+      if (same) {
         await this.configure(spec);
         return this.status();
       }
       await this.container.destroy("restarting with a new spec");
+    } else if (lazy && same) {
+      // Asleep after its idle timeout (or exited): a caller re-asserting
+      // the same spec — VIMS after its own restart — must not wake it; its
+      // next request does.
+      return this.status();
     }
     await this.launch(spec);
     return this.status();
@@ -305,7 +313,7 @@ export default {
         case "PUT": {
           const spec = parseSpec(id, await request.json().catch(() => null), RUNTIME_NAMES);
           if (typeof spec === "string") return json(400, { error: spec });
-          return json(200, await sandbox.start(spec));
+          return json(200, await sandbox.start(spec, url.searchParams.get("lazy") === "1"));
         }
         case "GET":
           return json(200, await sandbox.status());
