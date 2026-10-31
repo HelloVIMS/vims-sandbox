@@ -18,7 +18,7 @@
       {
         "path": "/opt/vims/bin/hermes",
         "mode": 493,
-        "from": "https://github.com/HelloVIMS/Runtimes/releases/download/latest/hermes-linux-amd64"
+        "from": "https://github.com/HelloVIMS/Runtimes/releases/download/hermes-a938f00f0f3c/hermes-linux-amd64"
       }
     ]
   },
@@ -33,7 +33,7 @@
       {
         "path": "/opt/vims/bin/openfang",
         "mode": 493,
-        "from": "https://github.com/HelloVIMS/Runtimes/releases/download/latest/openfang-linux-amd64"
+        "from": "https://github.com/HelloVIMS/Runtimes/releases/download/openfang-acf2587e46be/openfang-linux-amd64"
       }
     ]
   },
@@ -48,7 +48,7 @@
       {
         "path": "/opt/vims/bin/nemoclaw",
         "mode": 493,
-        "from": "https://github.com/HelloVIMS/Runtimes/releases/download/latest/nemoclaw-linux-amd64"
+        "from": "https://github.com/HelloVIMS/Runtimes/releases/download/nemoclaw-ef3ffec452ba/nemoclaw-linux-amd64"
       },
       {
         "path": "/opt/package.json",

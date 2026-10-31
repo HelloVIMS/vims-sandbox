@@ -72,3 +72,14 @@ node scripts/bundle.mjs dist   # what CI publishes
 
 Each push to `main` publishes release `vims-sandbox-<sha12>` and the rolling
 `latest` that VIMS deploys.
+
+### Updating assembled-runtime downloads
+The Hermes, OpenFang and NemoClaw binary inputs use version-specific release
+URLs in both `runtimes.json` and `runtimes.lock.json`, not the rolling `latest`
+release. A lock pins bytes, but a mutable URL can stop serving those bytes and
+break otherwise unchanged builds. For an intentional upgrade, choose a reviewed
+per-SHA release in `runtimes.json`, run `node scripts/lock-images.mjs`, then review
+and commit the lock diff. `npm run bundle` still verifies the downloaded SHA-256.
+Version-specific tags are maintainer-managed, not an immutable-content guarantee;
+the checksum check remains the authority. Pin tests require declarations and
+locked URLs to agree and reject rolling `latest` URLs.
