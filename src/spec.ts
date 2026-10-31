@@ -109,9 +109,26 @@ export function parseLiveUpdate(raw: unknown): LiveUpdate | string {
   return out;
 }
 
-/** A stable fingerprint of a spec: a running container is reused only for the same one. */
-export async function specHash(spec: StartSpec): Promise<string> {
-  const data = new TextEncoder().encode(JSON.stringify(spec));
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", data));
-  return Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+/** Sort object keys, not arrays: argv, seed files and policy rules remain ordered. */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value)
+      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+      .map(([key, item]) => [key, canonical(item)]));
+  }
+  return value;
+}
+async function digest(value: unknown): Promise<string> {
+  const data = new TextEncoder().encode(JSON.stringify(value));
+  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+/** A stable fingerprint, independent of JSON object insertion order. */
+export function specHash(spec: StartSpec): Promise<string> {
+  return digest(canonical(spec));
+}
+/** Read compatibility for fingerprints persisted before canonical hashing. */
+export function legacySpecHash(spec: StartSpec): Promise<string> {
+  return digest(spec);
 }

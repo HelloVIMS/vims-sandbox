@@ -72,3 +72,15 @@ node scripts/bundle.mjs dist   # what CI publishes
 
 Each push to `main` publishes release `vims-sandbox-<sha12>` and the rolling
 `latest` that VIMS deploys.
+
+### Lifecycle consistency
+Lifecycle mutations (start, wake, live update, stop, and automatic HTTP wake)
+are serialized per Durable Object, including across asynchronous configuration
+calls. HTTP readiness waits and proxied response streams are outside this queue.
+This is transition serialization, not a durable job queue or an exactly-once
+execution guarantee across process failure.
+Spec fingerprints ignore JSON object key order but preserve array order. Existing
+fingerprints migrate on a matching start or live update; a lazy start still leaves
+a sleeping instance asleep. Exit notifications are associated with a launch
+generation so a delayed notification from a replaced or stopped container cannot
+overwrite the current instance's exit state.

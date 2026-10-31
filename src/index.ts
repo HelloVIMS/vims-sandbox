@@ -22,7 +22,7 @@ import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import { GATEWAY_HOST, sameSecret, serveGateway, type ModelRoute } from "./gateway";
 import { evaluate, type EgressPolicy } from "./policy";
 import { RUNTIMES, RUNTIME_NAMES } from "./runtimes";
-import { DEFAULT_TIMEOUT, INSTANCE_ID, parseLiveUpdate, parseSpec, specHash, type LiveUpdate, type StartSpec } from "./spec";
+import { DEFAULT_TIMEOUT, INSTANCE_ID, legacySpecHash, parseLiveUpdate, parseSpec, specHash, type LiveUpdate, type StartSpec } from "./spec";
 import { CA_PATH, RUNTIME_LOG, entrypointFor, fileEnv } from "./wrapper";
 
 declare const __VIMS_SANDBOX_VERSION__: string;
@@ -93,6 +93,24 @@ const READY_TIMEOUT_MS = 300_000;
 
 /** One VIMS instance: its container, spec and lifecycle. */
 export class VimsSandbox extends DurableObject<Env> {
+  // Serialize lifecycle transitions across awaits, but not long-lived proxied
+  // requests. A failed operation must not poison the next queued operation.
+  private lifecycle: Promise<void> = Promise.resolve();
+  private mutate<T>(action: () => Promise<T>): Promise<T> {
+    const result = this.lifecycle.then(action);
+    this.lifecycle = result.then(() => {}, () => {});
+    return result;
+  }
+  private async matchesRunningSpec(next: StartSpec): Promise<boolean> {
+    const fingerprint = this.ctx.storage.kv.get<string>("runningSpec");
+    const hash = await specHash(next);
+    if (fingerprint === hash) return true;
+    // Compare the old fingerprint to the saved spec BEFORE replacing it.
+    // Reordered input must not restart an existing container during upgrade.
+    const saved = this.spec();
+    return saved !== undefined && fingerprint === await legacySpecHash(saved)
+      && hash === await specHash(saved);
+  }
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     // After a deploy or eviction the container may still run: its
@@ -147,14 +165,21 @@ export class VimsSandbox extends DurableObject<Env> {
       },
       labels: { runtime: spec.runtime, vims: spec.instanceId.slice(0, 64) },
     });
+    const generation = crypto.randomUUID();
+    this.ctx.storage.kv.put("generation", generation);
     try {
       await this.configure(spec);
       this.ctx.storage.kv.put("startedAt", Date.now());
       this.ctx.storage.kv.put("runningSpec", await specHash(spec));
       this.ctx.storage.kv.delete("lastExit");
+      const recordExit = (error: string | null) => {
+        if (this.ctx.storage.kv.get("generation") === generation) {
+          this.ctx.storage.kv.put("lastExit", { at: Date.now(), error });
+        }
+      };
       this.container.monitor().then(
-        () => this.ctx.storage.kv.put("lastExit", { at: Date.now(), error: null }),
-        (e: unknown) => this.ctx.storage.kv.put("lastExit", { at: Date.now(), error: String(e) }),
+        () => recordExit(null),
+        (e: unknown) => recordExit(String(e)),
       );
     } catch (e) {
       await this.container.destroy(e);
@@ -184,22 +209,26 @@ export class VimsSandbox extends DurableObject<Env> {
   }
 
   async start(spec: StartSpec, lazy = false): Promise<Record<string, unknown>> {
-    this.ctx.storage.kv.put("spec", spec);
-    const same = this.ctx.storage.kv.get("runningSpec") === (await specHash(spec));
-    if (this.container.running) {
-      if (same) {
-        await this.configure(spec);
+    return this.mutate(async () => {
+      const same = await this.matchesRunningSpec(spec);
+      this.ctx.storage.kv.put("spec", spec);
+      if (this.container.running) {
+        if (same) {
+          await this.configure(spec);
+          this.ctx.storage.kv.put("runningSpec", await specHash(spec));
+          return this.status();
+        }
+        await this.container.destroy("restarting with a new spec");
+      } else if (lazy && same) {
+        // Asleep after its idle timeout (or exited): a caller re-asserting
+        // the same spec — VIMS after its own restart — must not wake it; its
+        // next request does.
+        this.ctx.storage.kv.put("runningSpec", await specHash(spec));
         return this.status();
       }
-      await this.container.destroy("restarting with a new spec");
-    } else if (lazy && same) {
-      // Asleep after its idle timeout (or exited): a caller re-asserting
-      // the same spec — VIMS after its own restart — must not wake it; its
-      // next request does.
+      await this.launch(spec);
       return this.status();
-    }
-    await this.launch(spec);
-    return this.status();
+    });
   }
 
   /**
@@ -209,16 +238,18 @@ export class VimsSandbox extends DurableObject<Env> {
    * handler without dropping open connections. No restart, no lost disk.
    */
   async update(patch: LiveUpdate): Promise<Record<string, unknown>> {
-    const spec = this.spec();
-    if (!spec) throw new Error("instance not started");
-    const wasCurrent = this.ctx.storage.kv.get("runningSpec") === (await specHash(spec));
-    const next: StartSpec = { ...spec, ...(patch.egress ? { egress: patch.egress } : {}), ...(patch.model ? { model: patch.model } : {}) };
-    this.ctx.storage.kv.put("spec", next);
-    if (this.container.running && wasCurrent) {
-      await this.configure(next);
-      this.ctx.storage.kv.put("runningSpec", await specHash(next));
-    }
-    return this.status();
+    return this.mutate(async () => {
+      const spec = this.spec();
+      if (!spec) throw new Error("instance not started");
+      const wasCurrent = await this.matchesRunningSpec(spec);
+      const next: StartSpec = { ...spec, ...(patch.egress ? { egress: patch.egress } : {}), ...(patch.model ? { model: patch.model } : {}) };
+      this.ctx.storage.kv.put("spec", next);
+      if (this.container.running && wasCurrent) {
+        await this.configure(next);
+        this.ctx.storage.kv.put("runningSpec", await specHash(next));
+      }
+      return this.status();
+    });
   }
 
   async status(): Promise<Record<string, unknown>> {
@@ -236,16 +267,21 @@ export class VimsSandbox extends DurableObject<Env> {
 
   /** Starts a stopped container from its saved spec (no wait); the caller polls status for ready. */
   async wake(): Promise<Record<string, unknown>> {
-    const spec = this.spec();
-    if (!spec) throw new Error("instance not started");
-    if (!this.container.running) await this.launch(spec);
-    return this.status();
+    return this.mutate(async () => {
+      const spec = this.spec();
+      if (!spec) throw new Error("instance not started");
+      if (!this.container.running) await this.launch(spec);
+      return this.status();
+    });
   }
 
   async stop(): Promise<void> {
-    this.ctx.storage.kv.delete("spec");
-    this.ctx.storage.kv.delete("runningSpec");
-    if (this.container.running) await this.container.destroy("stopped by VIMS");
+    return this.mutate(async () => {
+      this.ctx.storage.kv.delete("spec");
+      this.ctx.storage.kv.delete("runningSpec");
+      this.ctx.storage.kv.delete("generation");
+      if (this.container.running) await this.container.destroy("stopped by VIMS");
+    });
   }
 
   async logs(lines: number): Promise<string> {
@@ -263,9 +299,12 @@ export class VimsSandbox extends DurableObject<Env> {
 
   /** The runtime's own API; a stopped container with a saved spec is woken. */
   override async fetch(request: Request): Promise<Response> {
-    const spec = this.spec();
+    const spec = await this.mutate(async () => {
+      const saved = this.spec();
+      if (saved && !this.container.running) await this.launch(saved);
+      return saved;
+    });
     if (!spec) return json(404, { error: "instance not started" });
-    if (!this.container.running) await this.launch(spec);
     if (!(await this.waitReady(spec.port))) {
       return json(503, { error: `${spec.runtime} did not start listening on port ${spec.port}`, lastExit: this.ctx.storage.kv.get("lastExit") ?? null });
     }
