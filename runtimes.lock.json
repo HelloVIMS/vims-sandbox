@@ -45,7 +45,7 @@
       {
         "path": "/opt/vims/bin/hermes",
         "mode": 493,
-        "source": "https://github.com/HelloVIMS/Runtimes/releases/download/latest/hermes-linux-amd64",
+        "source": "https://github.com/HelloVIMS/Runtimes/releases/download/hermes-a938f00f0f3c/hermes-linux-amd64",
         "sha256": "6fd2fe28f53a3fbbce32f9dbb746f482a606f8df5fc19900c97d3028383b9660",
         "size": 113196864
       }
@@ -65,7 +65,7 @@
       {
         "path": "/opt/vims/bin/openfang",
         "mode": 493,
-        "source": "https://github.com/HelloVIMS/Runtimes/releases/download/latest/openfang-linux-amd64",
+        "source": "https://github.com/HelloVIMS/Runtimes/releases/download/openfang-acf2587e46be/openfang-linux-amd64",
         "sha256": "33cd91c86c357f5d8c4d4abed2b680f17b3ef868f2f1dac84766d929f9e3ff0d",
         "size": 65798016
       }
@@ -85,7 +85,7 @@
       {
         "path": "/opt/vims/bin/nemoclaw",
         "mode": 493,
-        "source": "https://github.com/HelloVIMS/Runtimes/releases/download/latest/nemoclaw-linux-amd64",
+        "source": "https://github.com/HelloVIMS/Runtimes/releases/download/nemoclaw-ef3ffec452ba/nemoclaw-linux-amd64",
         "sha256": "cd209aa1040522d46a78d5e31efea547722ae9ad5e1124b9aee98d60aecbe69c",
         "size": 126730317
       },
